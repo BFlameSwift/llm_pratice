@@ -90,6 +90,9 @@ class GPT(nn.Module):
             ln_f = nn.LayerNorm(config.n_embd),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        # weight sharing scheme
+        self.transformer.wte.weight = self.lm_head.weight
+
     def forward(self, idx, target=None):
         B,T = idx.size()
         assert T <= self.config.block_size, "Cannot forward, model block size is exhausted."
@@ -164,6 +167,7 @@ class DataLoaderLite:
         # at init load tokens from disk and store them in memory
         with open('input.txt', 'r') as f:
             text = f.read()
+        print(f"loaded text of length {len(text)}")
         enc = tiktoken.get_encoding('gpt2')
         tokens = enc.encode(text)
         self.tokens = torch.tensor(tokens)
@@ -196,12 +200,13 @@ print(f"using device: {device}")
 num_return_sequences = 3
 max_length = 30
 
-# import tiktoken
+
 # enc = tiktoken.get_encoding('gpt2')
 # with open('input.txt', 'r') as f:
 #     text = f.read()
 # text = text[:1000]
 # tokens = enc.encode(text)
+import tiktoken
 train_loader = DataLoaderLite(B=4, T=32)
 
 # B, T = 4, 32

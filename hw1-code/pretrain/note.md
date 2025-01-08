@@ -123,3 +123,18 @@ step 4, loss: 8.504598617553711
 step 5, loss: 8.149449348449707
 step 6, loss: 8.97163200378418
 ```
+
+### lm_head and wpe should share parameters 
+
+实现共享权重，
+为什么可以呢？：
+
+wte是word embedding，wpe是position embedding，lm_head是最后的线性层，这里的transformer是gpt2模型，wte和wpe是gpt2的一部分，lm_head是我们自己加的，所以我们可以让lm_head和wte共享权重，这样就可以让lm_head和wte共享权重了。
+
+同时共享参数后，相似的词语会有相似的embedding，这样可以提高模型的泛化能力。
+
+好处：显著的减少参数量，这两部分参数量很大。
+```python
+        # weight sharing scheme
+        self.transformer.wte.weight = self.lm_head.weight
+```
