@@ -1,8 +1,8 @@
 import torch
-import transformers
-
-from utils import recursive_getattr, recursive_setattr
 import torch.nn as nn
+import transformers
+from utils import recursive_getattr, recursive_setattr
+
 
 class LoRALinear(torch.nn.Module):
     def __init__(self, weight, bias, lora_dim, lora_scaling):
@@ -25,7 +25,13 @@ class LoRALinear(torch.nn.Module):
 
     def init_parameters(self):
         # TODO: Initialize LoRA parameters
-        raise NotImplementedError
+        nn.Linear.reset_parameters(self)
+        
+        nn.init.kaiming_uniform_(self.lora_right_weight, a=math.sqrt(5))
+        nn.init.zeros_(self.lora_left_weight)
+        # nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
+        # nn.init.zeros_(self.lora_B)
+        # raise NotImplementedError
         ##################################
 
     def forward(self, input):
