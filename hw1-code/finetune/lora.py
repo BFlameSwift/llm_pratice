@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import transformers
 from utils import recursive_getattr, recursive_setattr
 
@@ -36,7 +37,11 @@ class LoRALinear(torch.nn.Module):
 
     def forward(self, input):
         # TODO: Implement the forward function
-        raise NotImplementedError
+        # 1. Calculate the linear output using the original weight and bias
+        result = F.linear(input, self.weight, self.bias)
+        result += self.lora_right_weight @ self.lora_left_weight * self.lora_scaling
+        return result
+        # raise NotImplementedError
         ######################################
 
 
