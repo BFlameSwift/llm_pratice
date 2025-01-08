@@ -191,3 +191,17 @@ torch.set_float32_matmul_precision('high')
 加入了时间统计功能，计算每秒处理多少token，注意等待gpu处理完任务再计时
 
 torch.cuda.synchronize() 
+
+
+### add bfloat16
+引入pytorch的autocast,对一些计算引入更小的精度，提高计算效率
+
+```python 
+    with torch.autocast(device_type=device, dtype=torch.bfloat16):
+        logits, loss = model(x, y)
+```
+
+只在前向传播和loss计算使用bf16，而不是反向传播和梯度更新
+
+![alt text](img/image.png)
+
