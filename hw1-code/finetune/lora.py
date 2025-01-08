@@ -2,7 +2,7 @@ import torch
 import transformers
 
 from utils import recursive_getattr, recursive_setattr
-
+import torch.nn as nn
 
 class LoRALinear(torch.nn.Module):
     def __init__(self, weight, bias, lora_dim, lora_scaling):
@@ -11,12 +11,15 @@ class LoRALinear(torch.nn.Module):
         self.weight = torch.nn.Parameter(weight)
         self.bias = torch.nn.Parameter(bias)
         # TODO: Implement lora left and right weights
-        self.lora_right_weight = None
-        self.lora_left_weight = None
+        # 参考 https://github.com/microsoft/LoRA  lora的实现， loralib/layers.py
+        self.lora_right_weight = nn.Parameter(self.weight.new_zeros((self.weight.size(0), lora_dim)))
+        self.lora_left_weight = nn.Parameter(self.weight.new_zeros((lora_dim, self.weight.size(1))))
         #############################################
         self.lora_scaling = lora_scaling / lora_dim
         self.init_parameters()
         # TODO: Freeze original weight and bias
+        self.weight.requires_grad = False
+        self.bias.requires_grad = False
         #
         #######################################
 
