@@ -138,3 +138,45 @@ wte是word embedding，wpe是position embedding，lm_head是最后的线性层�
         # weight sharing scheme
         self.transformer.wte.weight = self.lm_head.weight
 ```
+
+
+### GPT-2 Initialization
+初始化，设置bios = 0,在线性层放缩
+
+正常使用哈维尔初始化 1/sqrt(d)的初始化方式. 而此处硬编码为0.02是合理的
+
+缩放因子，控制残差流的增长方式。 n ** -0.5 (层数) 来控制std
+
+
+```python
+
+def _init_weights(self, module):
+    if isinstance(module, nn.Linear):
+        std = 0.02
+        # scale initialization of weights for transformer
+        if hasattr(module, 'NANOGPT_SCALE_INIT'):
+            std *= (2 * self.config.n_layer) ** -0.5 
+        torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+        if module.bias is not None:
+            torch.nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Embedding):
+        # 硬编码为0.02 
+        torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+```
+
+这里的loss又回升了, 
+```text
+step 37, loss: 5.502460479736328
+step 38, loss: 5.68325138092041
+step 39, loss: 5.064756393432617
+step 40, loss: 5.762222766876221
+step 41, loss: 7.869300365447998
+step 42, loss: 8.054488182067871
+step 43, loss: 9.461557388305664
+step 44, loss: 11.625313758850098
+step 45, loss: 8.690959930419922
+step 46, loss: 7.3267974853515625
+step 47, loss: 7.999337196350098
+step 48, loss: 8.160482406616211
+step 49, loss: 7.6284027099609375
+```
