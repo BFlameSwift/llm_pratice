@@ -90,7 +90,7 @@ class GPT(nn.Module):
             ln_f = nn.LayerNorm(config.n_embd),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-    def forward(self, idx):
+    def forward(self, idx, target=None):
         B,T = idx.size()
         assert T <= self.config.block_size, "Cannot forward, model block size is exhausted."
         # forward token and position embeddings
@@ -105,7 +105,11 @@ class GPT(nn.Module):
 
         x = self.transformer['ln_f'](x)
         logits = self.lm_head(x) # (B, T, vocab_size)
-        return logits
+
+        loss = None
+        if target is not None:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
+        return logits, loss
 
     # copy from
     @classmethod
@@ -168,6 +172,17 @@ print(f"using device: {device}")
 num_return_sequences = 3
 max_length = 30
 
+import tiktoken
+enc = tiktoken.get_encoding('gpt2')
+with open('input.txt', 'r') as f:
+    text = f.read()
+text = text[:1000]
+tokens = enc.encode(text)
+B, T = 4, 32
+buf = torch.tensor(tokens[:B*T + 1])
+buf = buf.to(device)
+x = buf[:-1].view(B, T)
+y = buf[1:].view(B, T)
 
 
 # model = GPT.from_pretrained('gpt2')
@@ -175,7 +190,9 @@ model = GPT(GPTConfig())
 model.eval()
 
 model = model.to(device)
-
+logits, loss = model(x, y)
+print(loss)
+exit(0)
 import tiktoken
 
 enc = tiktoken.get_encoding('gpt2')
