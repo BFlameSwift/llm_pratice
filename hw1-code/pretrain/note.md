@@ -180,3 +180,14 @@ step 47, loss: 7.999337196350098
 step 48, loss: 8.160482406616211
 step 49, loss: 7.6284027099609375
 ```
+
+### add TensorFloat32 tf32 matmuls
+
+使用tf32做乘法，8x free提升（实际三倍）
+```python
+torch.set_float32_matmul_precision('high')
+```
+
+加入了时间统计功能，计算每秒处理多少token，注意等待gpu处理完任务再计时
+
+torch.cuda.synchronize() 

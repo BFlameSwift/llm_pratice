@@ -1,10 +1,12 @@
+import math
+import time
 from dataclasses import dataclass
 
+import tiktoken
 import torch
 import torch.nn as nn
-import math
 from torch.nn import functional as F
-# from transformers.models.deprecated.trajectory_transformer.modeling_trajectory_transformer import CausalSelfAttention
+
 
 class CausalSelfAttention(nn.Module):
 
@@ -224,9 +226,13 @@ max_length = 30
 #     text = f.read()
 # text = text[:1000]
 # tokens = enc.encode(text)
-import tiktoken
-train_loader = DataLoaderLite(B=4, T=32)
 
+
+train_loader = DataLoaderLite(B=16, T=1024)
+
+# use high precision for matmul TF32
+#link https://pytorch.org/docs/stable/notes/cuda.html#tf32-on-ampere
+torch.set_float32_matmul_precision('high')
 # B, T = 4, 32
 # buf = torch.tensor(tokens[:B*T + 1])
 # buf = buf.to(device)
@@ -244,13 +250,19 @@ model.to(device)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 for i in range(50):
+    t0 = time.time()
     x, y = train_loader.next_batch()
     x, y = x.to(device), y.to(device)
     optimizer.zero_grad()
     logits, loss = model(x, y)
     loss.backward()
     optimizer.step()
-    print(f"step {i}, loss: {loss.item()}")
+    # wait for the GPU to finish work
+    torch.cuda.synchronize() # wait for the GPU to finish work
+    t1 = time.time()
+    dt = (t1 - t0)*1000 # time difference in miliseconds
+    tokens_per_sec = (train_loader.B * train_loader.T) / (t1 - t0)
+    print(f"step {i}, loss: {loss.item()}, dt: {dt:.2f}ms, tok/sec: {tokens_per_sec:.2f}")
 
 
 exit(0)
@@ -265,7 +277,8 @@ tokens = tokens.unsqueeze(0).repeat(num_return_sequences,1)
 x = tokens.to('cuda')
 
 # prefix tokens
-import tiktoken
+
+
 enc = tiktoken.get_encoding('gpt2')
 tokens = enc.encode("Hello, I'm a language model,")
 tokens = torch.tensor(tokens, dtype=torch.long) # (8,)
