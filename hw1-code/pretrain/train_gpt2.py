@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
+import math
 from torch.nn import functional as F
 # from transformers.models.deprecated.trajectory_transformer.modeling_trajectory_transformer import CausalSelfAttention
 
@@ -89,6 +90,22 @@ class GPT(nn.Module):
             ln_f = nn.LayerNorm(config.n_embd),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+    def forward(self, idx):
+        B,T = idx.size()
+        assert T <= self.config.block_size, "Cannot forward, model block size is exhausted."
+        # forward token and position embeddings
+        pos = torch.arange(T, dtype=torch.long, device=idx.device)
+        pos_emb = self.transformer['wpe'](pos) # (T, n_embd)
+        tok_emb = self.transformer['wte'](idx) # (B, T, n_embd)
+        x = tok_emb + pos_emb
+
+        # forward
+        for block in self.transformer.h:
+            x = block(x)
+
+        x = self.transformer['ln_f'](x)
+        logits = self.lm_head(x) # (B, T, vocab_size)
+        return logits
 
     # copy from
     @classmethod
@@ -138,5 +155,56 @@ class GPT(nn.Module):
 
 
 # ----------------- train_gpt2.py -----------------
+# model = GPT.from_pretrained('gpt2')
+# print("dont crash")
+
+num_return_sequences = 3
+max_length = 30
+
 model = GPT.from_pretrained('gpt2')
-print("dont crash")
+model.eval()
+model = model.to('cuda')
+
+import tiktoken
+
+enc = tiktoken.get_encoding('gpt2')
+tokens = enc.encode("Hello, I'm a language model,")
+tokens = torch.tensor(tokens,dtype=torch.long)
+tokens = tokens.unsqueeze(0).repeat(num_return_sequences,1)
+
+x = tokens.to('cuda')
+
+# prefix tokens
+import tiktoken
+enc = tiktoken.get_encoding('gpt2')
+tokens = enc.encode("Hello, I'm a language model,")
+tokens = torch.tensor(tokens, dtype=torch.long) # (8,)
+tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1) # (5, 8)
+x = tokens.to('cuda')
+# generate! right now x is (B, T) where B = 5, T = 8
+# set the seed to 42
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+while x.size(1) < max_length:
+    # forward the model to get the logits
+    with torch.no_grad():
+        logits = model(x) # (B, T, vocab_size)
+        # take the logits at the last position
+        logits = logits[:, -1, :] # (B, vocab_size)
+        # get the probabilities
+        probs = F.softmax(logits, dim=-1)
+        # do top-k sampling of 50 (huggingface pipeline default)
+        # topk_probs here becomes (5, 50), topk_indices is (5, 50)
+        topk_probs, topk_indices = torch.topk(probs, 50, dim=-1)
+        # select a token from the top-k probabilities
+        # note: multinomial does not demand the input to sum to 1
+        ix = torch.multinomial(topk_probs, 1) # (B, 1)
+        # gather the corresponding indices
+        xcol = torch.gather(topk_indices, -1, ix) # (B, 1)
+        # append to the sequence
+        x = torch.cat((x, xcol), dim=1)
+# print the generated text
+for i in range(num_return_sequences):
+    tokens = x[i, :max_length].tolist()
+    decoded = enc.decode(tokens)
+    print(">", decoded)
