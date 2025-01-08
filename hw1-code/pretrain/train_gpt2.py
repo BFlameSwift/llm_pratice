@@ -169,8 +169,7 @@ elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
     device = "mps"
 print(f"using device: {device}")
 
-num_return_sequences = 3
-max_length = 30
+
 
 import tiktoken
 enc = tiktoken.get_encoding('gpt2')
@@ -188,11 +187,24 @@ y = buf[1:].view(B, T)
 # model = GPT.from_pretrained('gpt2')
 model = GPT(GPTConfig())
 model.eval()
+num_return_sequences = 3
+max_length = 30
 
 model = model.to(device)
 logits, loss = model(x, y)
-print(loss)
+# print(loss)
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+for i in range(50):
+    optimizer.zero_grad()
+    logits, loss = model(x, y)
+    loss.backward()
+    optimizer.step()
+    print(f"step {i}, loss: {loss.item()}")
+
+
 exit(0)
+
 import tiktoken
 
 enc = tiktoken.get_encoding('gpt2')
