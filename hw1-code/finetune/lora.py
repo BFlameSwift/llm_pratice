@@ -63,12 +63,28 @@ def convert_linear_layer_to_lora(model, part_module_name, lora_dim=0, lora_scali
 
 
 def only_optimize_lora_parameters(model):
+    # study from  loralib/utils.py
     # TODO: Turn off the gradient of all the parameters except the LoRA parameters
-    raise NotImplementedError
+    # raise NotImplementedError
+    for n, p in model.named_parameters():
+        if 'lora_' not in n:
+        p.requires_grad = False
+    for m in model.modules():
+        if isinstance(m, LoRALayer) and hasattr(m, 'bias') and m.bias is not None:
+            m.bias.requires_grad = True
     ##############################################################################
 
 def get_lora_state_dict(model):
     # TODO: return lora left and right weights as state dict
     # The saved state dict will be used later for loading
-    raise NotImplementedError
+    # raise NotImplementedError
+    my_state_dict = model.state_dict()
+    to_return = {}
+    for k in my_state_dict:
+        if 'lora_' in k:
+            to_return[k] = my_state_dict[k]
+            bias_name = k.split('lora_')[0]+'bias'
+            if bias_name in my_state_dict:
+                to_return[bias_name] = my_state_dict[bias_name]
+    return to_return
     ########################################################
