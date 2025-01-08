@@ -1,0 +1,125 @@
+
+note
+
+针对每一个commit记录笔记
+
+
+## commit generate from the model
+更新代码，使用tiktoken进行tokenization，对于gpt2模型，使用tiktoken.get_encoding('gpt2')即可获得对应的tokenizer，然后使用tokenizer.encode()方法进行编码，得到的结果是一个list，然后转换为tensor即可。
+
+不断预测next token，选取topk=50，采样再彬姐到原本的序列上，直到达到最大长度。
+```python
+# prefix tokens
+import tiktoken
+enc = tiktoken.get_encoding('gpt2')
+tokens = enc.encode("Hello, I'm a language model,")
+tokens = torch.tensor(tokens, dtype=torch.long) # (8,)
+tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1) # (5, 8)
+x = tokens.to('cuda')
+# generate! right now x is (B, T) where B = 5, T = 8
+# set the seed to 42
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+while x.size(1) < max_length:
+    # forward the model to get the logits
+    with torch.no_grad():
+        logits = model(x) # (B, T, vocab_size)
+        # take the logits at the last position
+        logits = logits[:, -1, :] # (B, vocab_size)
+        # get the probabilities
+        probs = F.softmax(logits, dim=-1)
+        # do top-k sampling of 50 (huggingface pipeline default)
+        # topk_probs here becomes (5, 50), topk_indices is (5, 50)
+        topk_probs, topk_indices = torch.topk(probs, 50, dim=-1)
+        # select a token from the top-k probabilities
+        # note: multinomial does not demand the input to sum to 1
+        ix = torch.multinomial(topk_probs, 1) # (B, 1)
+        # gather the corresponding indices
+        xcol = torch.gather(topk_indices, -1, ix) # (B, 1)
+        # append to the sequence
+        x = torch.cat((x, xcol), dim=1)
+# print the generated text
+for i in range(num_return_sequences):
+    tokens = x[i, :max_length].tolist()
+    decoded = enc.decode(tokens)
+    print(">", decoded)
+```
+
+
+###  autodetect device, and switch to a random model
+检测是否有cuda
+```python
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda"
+elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    device = "mps"
+print(f"using device: {device}")
+```
+
+
+
+### implement gpt forward
+在forward中，然后计算cross entropy loss，返回logits和loss。
+并打印一个loss测试
+```python
+loss = None
+if target is not None:
+    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
+return logits, loss
+
+```
+
+### little loop crushes a little batch
+
+load文件，在一个小的batch上进行训练，然后打印loss，体会训练过程
+```python
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+for i in range(50):
+    optimizer.zero_grad()
+    logits, loss = model(x, y)
+    loss.backward()
+    optimizer.step()
+    print(f"step {i}, loss: {loss.item()}")
+```
+
+```text
+using device: cuda
+step 0, loss: 10.926305770874023
+step 1, loss: 6.574726581573486
+step 2, loss: 4.240943431854248
+step 3, loss: 2.620696544647217
+step 4, loss: 1.5201581716537476
+step 5, loss: 0.8466092348098755
+```
+
+### add a DataLoaderLite class
+实现一个DataLoaderLite类，用于加载数据，每次返回一个batch。
+注意x,y的实现方式，巧妙利用错位的方式实现。
+
+```python
+class DataLoaderLite:
+    def next_batch(self):
+        B, T = self.B, self.T
+        # 注意x,y的实现方式，巧妙利用错位的方式实现。
+        buf = self.tokens[self.current_position : self.current_position+B*T+1]
+        x = (buf[:-1]).view(B, T) # inputs
+        y = (buf[1:]).view(B, T) # targets
+        # advance the position in the tensor
+        self.current_position += B * T
+        # 顺序读完整个语料，重新开始
+        if self.current_position + (B * T + 1) > len(self.tokens):
+            self.current_position = 0
+        return x, y
+```
+```text
+loaded 9627 tokens
+1 epoch = 75 batches
+step 0, loss: 10.887125015258789
+step 1, loss: 9.66153621673584
+step 2, loss: 8.721807479858398
+step 3, loss: 9.031460762023926
+step 4, loss: 8.504598617553711
+step 5, loss: 8.149449348449707
+step 6, loss: 8.97163200378418
+```
