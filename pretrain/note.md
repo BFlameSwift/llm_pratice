@@ -290,3 +290,35 @@ num_nodecay_params = sum(p.numel() for p in nodecay_params)
 fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
         use_fused = fused_available and 'cuda' in device
 ```
+
+
+### add gradient accumulation
+
+梯度累积，将梯度累积到多个batch上，然后再更新参数，可以减少内存占用，提高计算效率。
+
+也要注意梯度累积的时候，梯度要除以累积的次数，normalize一下
+```python
+grad_accum_steps = total_batch_size // (B * T)
+
+   for micro_step in range(grad_accum_steps):
+        x, y = train_loader.next_batch()
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            logits, loss = model(x, y)
+        loss = loss / grad_accum_steps
+        loss_accum += loss.detach()
+        loss.backward()
+   optimizer.step()
+```
+```text
+1 epoch = 20 batches
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 98, with 121,344 parameters
+using fused AdamW: True
+step    0 | loss: 11.044553 | lr 6.0000e-05 | norm: 26.9359 | dt: 21725.70ms | tok/sec: 24132.16
+step    1 | loss: 9.702580 | lr 1.2000e-04 | norm: 11.1244 | dt: 3980.83ms | tok/sec: 131703.12
+step    2 | loss: 9.301566 | lr 1.8000e-04 | norm: 6.5375 | dt: 3975.35ms | tok/sec: 131884.87
+step    3 | loss: 9.718234 | lr 2.4000e-04 | norm: 6.7101 | dt: 3976.64ms | tok/sec: 131842.06
+step    4 | loss: 9.110813 | lr 3.0000e-04 | norm: 4.0629 | dt: 3972.49ms | tok/sec: 131979.70
+step    5 | loss: 8.656642 | lr 3.6000e-04 | norm: 3.3112 | dt: 3971.69ms | tok/sec: 132006.28
+step    6 | loss: 8.345835 | lr 4.2000e-04 | norm: 2.2803 | dt: 3975.11ms | tok/sec
+```
