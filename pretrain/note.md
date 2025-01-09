@@ -1,4 +1,4 @@
-
+x
 note
 
 针对每一个commit记录笔记
@@ -321,4 +321,82 @@ step    3 | loss: 9.718234 | lr 2.4000e-04 | norm: 6.7101 | dt: 3976.64ms | tok/
 step    4 | loss: 9.110813 | lr 3.0000e-04 | norm: 4.0629 | dt: 3972.49ms | tok/sec: 131979.70
 step    5 | loss: 8.656642 | lr 3.6000e-04 | norm: 3.3112 | dt: 3971.69ms | tok/sec: 132006.28
 step    6 | loss: 8.345835 | lr 4.2000e-04 | norm: 2.2803 | dt: 3975.11ms | tok/sec
+
+step   46 | loss: 5.769111 | lr 7.3215e-05 | norm: 0.2178 | dt: 4139.32ms | tok/sec: 126660.56
+step   47 | loss: 5.787341 | lr 6.7460e-05 | norm: 0.2236 | dt: 4145.94ms | tok/sec: 126458.27
+step   48 | loss: 5.760652 | lr 6.3324e-05 | norm: 0.1935 | dt: 4144.67ms | tok/sec: 126497.05
+step   49 | loss: 5.759069 | lr 6.0832e-05 | norm: 0.2130 | dt: 4147.71ms | tok/sec: 126404.36
+```
+
+
+
+### add DistributedDataParallel training
+
+[-]  大概需要重看ddp的部分再次理解，优化的部分是如何多gpu进行的梯度累积 
+
+master—node 打印必要信息
+
+在dataloader中，让对应的rank 进程读取对应的数据。
+不过多卡并行的得到的数据和单卡是“不完全相同”的，导致loss的结果略有不同
+
+多卡并行导致数据要分发。
+
+DDP的基本设置
+
+torchrun --standalone --nproc_per_node=2 train_gpt2.py
+```python
+
+# run the training loop
+from torch.distributed import init_process_group, destroy_process_group
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.distributed as dist
+# set up DDP (distributed data parallel).
+# torchrun command sets the env variables RANK, LOCAL_RANK, and WORLD_SIZE
+ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+if ddp:
+    # use of DDP atm demands CUDA, we set the device appropriately according to rank
+    assert torch.cuda.is_available(), "for now i think we need CUDA for DDP"
+    init_process_group(backend='nccl')
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
+else:
+    # vanilla, non-DDP run
+    ddp_rank = 0
+    ddp_local_rank = 0
+    ddp_world_size = 1
+    master_process = True
+    # attempt to autodetect device
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "mps"
+    print(f"using device: {device}")
+```
+
+注意这里的model和raw_model的区别，model是DDP的模型，raw_model是原始的模型，因为DDP的模型是一个包装过的模型，所以要使用model.module来获取原始的模型。
+```python
+if ddp:
+    model = DDP(model, device_ids=[ddp_local_rank])
+raw_model = model.module if ddp else model
+```
+
+让 梯度在mini step中先不同步，在最后再同步，这样可以提高计算效率
+
+最后把loss在所有进程中求平均，得到最终的loss（必要，jupyter有实验）
+```python
+for step in range(max_steps):
+    t0 = time.time()
+        # instead of a SUM we want MEAN. Scale the loss here so it comes out right
+        loss = loss / grad_accum_steps
+        loss_accum += loss.detach()
+        if ddp:
+            model.require_backward_grad_sync = (micro_step == grad_accum_steps - 1)
+        loss.backward()
+    if ddp:
+        dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
 ```
