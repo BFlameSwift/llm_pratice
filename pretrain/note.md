@@ -400,3 +400,10 @@ for step in range(max_steps):
     if ddp:
         dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
 ```
+
+
+### add validation split
+
+由于需要多次dataloader，增加reset函数。
+
+其他和训练的时候一样，只是不需要梯度更新，只需要前向传播，计算loss即可。
