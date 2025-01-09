@@ -462,6 +462,8 @@ step     0 | loss: 10.936531 | lr 8.3916e-07 | norm: 17.0941 | dt: 358520.24ms |
 ### add checkpointing
 
 save checkpoint, 保存模型参数
+
+完全接续训练，除了保存当前权重之外，还需要保存optimizer状态。
 ```python
 torch.save(checkpoint, checkpoint_path)
 ```

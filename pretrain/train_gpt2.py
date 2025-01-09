@@ -218,6 +218,7 @@ enc = tiktoken.get_encoding('gpt2')
 import numpy as np
 def load_tokens(filename):
     npt = np.load(filename)
+    npt = npt.astype(np.int32)  # added after video
     ptt = torch.tensor(npt, dtype=torch.long)
     return ptt
 
@@ -360,8 +361,7 @@ train_loader = DataLoaderLite(B=B, T=T,process_rank=ddp_rank, num_processes=ddp_
 val_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="val")
 
 # use high precision for matmul TF32
-#link https://pytorch.org/docs/stable/notes/cuda.html#tf32-on-ampere
-torch.set_float32_matmul_precision('high')
+#link https://pytorch.org/docs/stable/notes/cuda.html#tf32-on-ampereet_float32_matmul_precision('high')
 torch.manual_seed(42 + ddp_rank)
 torch.cuda.manual_seed(42 + ddp_rank)
 # B, T = 4, 32
@@ -557,7 +557,8 @@ for step in range(max_steps):
         param_group['lr'] = lr
     optimizer.step()
     # wait for the GPU to finish work
-    torch.cuda.synchronize() # wait for the GPU to finish work
+    if device_type == "cuda":
+        torch.cuda.synchronize() # wait for the GPU to finish work
     t1 = time.time()
     dt = t1 - t0 # time difference in seconds
     tokens_processed = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
