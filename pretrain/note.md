@@ -264,5 +264,11 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), ep
 
 
 
-
+### add learning rate scheduler
+引入cosine learning rate scheduler，学习率调度器，调整学习率，使得模型更快收敛. 学习gpt3的设置
 ```python
+ lr = get_lr(step)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+    optimizer.step()
+```
