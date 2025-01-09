@@ -407,3 +407,48 @@ for step in range(max_steps):
 由于需要多次dataloader，增加reset函数。
 
 其他和训练的时候一样，只是不需要梯度更新，只需要前向传播，计算loss即可。
+
+### move up the samepling code into the main loop
+
+保持ddp的模型同步
+
+独立于循环的采样代码
+```python
+        sample_rng = torch.Generator(device=device)
+        sample_rng.manual_seed(42 + ddp_rank)
+```
+
+
+```text
+rank 0 sample 1: Hello, I'm a language model,WM presidingresources oversaw Abyss murder cohort Changed Deer []ileen Teachers018 Fle 1959Middle filler 96 Potentiallearnrolledcmp excavation swords
+rank 0 sample 2: Hello, I'm a language model, Rankingscil Pi Corner focusesNot endanger Guestsinside Tough []reraQualityulatingbars pingulating Guer hoverraid Klan KlanJoybars
+rank 0 sample 3: Hello, I'm a language model,ofiusp Corner near near Screw UE et lure Beyon AbyssTimer []joined Hardy Platform piled Pilotometer Changed regarded diss regarded beside
+step     0 | loss: 10.936531 | lr 8.3916e-07 | norm: 17.0941 | dt: 3440.15ms | tok/sec: 152402.81
+step     1 | loss: 10.882702 | lr 1.6783e-06 | norm: 16.2487 | dt: 2429.08ms | tok/sec: 215838.05
+step     2 | loss: 10.773277 | lr 2.5175e-06 | norm: 15.7733 | dt: 2429.34ms | tok/sec: 215815.39
+step     3 | loss: 10.626902 | lr 3.3566e-06 | norm: 14.1132 | dt: 2429.24ms | tok/sec: 215823.86
+step     4 | loss: 10.467472 | lr 4.1958e-06 | norm: 11.2847 | dt: 2430.04ms | tok/sec: 215752.84
+step     5 | loss: 10.315804 | lr 5.0350e-06 | norm: 9.0615 | dt: 2429.29ms | tok/sec: 215819.01
+step     6 | loss: 10.194836 | lr 5.8741e-06 | norm: 7.7370 | dt: 2433.58ms | tok/sec: 215438.82
+
+.........
+rank 1 sample 3: Hello, I'm a language model, but I'm trying to be a language game.
+On the table. An example could be found in the form of
+rank 0 sample 0: Hello, I'm a language model, and I hope you can have more time reading English.
+You must wait, and then move it. But, as
+rank 0 sample 1: Hello, I'm a language model, but they're not really a way to get them." In this context, you're a great place to learn.
+
+rank 0 sample 2: Hello, I'm a language model, but I will learn so you can get started when I'm working at my school. I have a lot of fun getting
+rank 0 sample 3: Hello, I'm a language model, it really is a language model, it is as simple as if it is written that we cannot assume to be written properly
+step  1400 | loss: 4.080996 | lr 5.9815e-04 | norm: 0.4113 | dt: 2994.92ms | tok/sec: 175059.22
+
+```
+
+
+### hellaswag adeval d to main train file, and logging
+
+在每250step 对模型评估
+
+添加hellaswag eval, 计算eval loss ， 输出一些sample
+
+打印一些loss log到文件
