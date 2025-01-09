@@ -241,3 +241,10 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True) # flash attention
 ```
 
 速度提升了近两倍， 228ms/epoch —— 144ms/epoch
+
+
+### fix ugly number 
+
+修改vocab到50304，符合2的幂次方，提高计算效率。 利用部分没利用了核
+
+144ms /epoch —— 136ms/epoch， 提升了5%左右
