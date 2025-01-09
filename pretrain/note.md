@@ -248,3 +248,21 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True) # flash attention
 修改vocab到50304，符合2的幂次方，提高计算效率。 利用部分没利用了核
 
 144ms /epoch —— 136ms/epoch， 提升了5%左右
+
+
+### AdamW params and grad clipping set
+学习部分gpt3的参数设置
+
+```python
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8)
+ norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+```
+
+梯度裁剪，防止某bach的梯度过大，导致模型不稳定。 shock your  model
+
+![shock.png](./img/image2.png)
+
+
+
+
+```python
