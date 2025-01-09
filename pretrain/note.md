@@ -272,3 +272,21 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), ep
         param_group['lr'] = lr
     optimizer.step()
 ```
+
+### add weight decay, only for 2D params, and add fused AdamW
+
+引入权重衰减，只对2D参数进行衰减，不对bias进行衰减，因为bias是一个偏置项，不需要进行衰减。
+
+检查是否有fused AdamW，如果有则使用，否则使用普通的AdamW。 可以减少内存往返，提高计算效率。
+```python
+optim_groups = [
+{'params': decay_params, 'weight_decay': weight_decay},
+{'params': nodecay_params, 'weight_decay': 0.0}
+]
+num_decay_params = sum(p.numel() for p in decay_params)
+num_nodecay_params = sum(p.numel() for p in nodecay_params)
+        
+        
+fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+        use_fused = fused_available and 'cuda' in device
+```
