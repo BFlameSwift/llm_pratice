@@ -203,5 +203,17 @@ torch.cuda.synchronize()
 
 只在前向传播和loss计算使用bf16，而不是反向传播和梯度更新
 
-![alt text](img/image.png)
+![alt text](./img/image.png)
 
+
+
+### 
+
+torch.compile
+
+kernel fusion,元素级别的操作合并到一起，减少内存往返
+
+```python
+model = torch.compile(model)
+```
+速度在我的机器上提升了2倍多，500ms/epoch ——228ms/epoch
