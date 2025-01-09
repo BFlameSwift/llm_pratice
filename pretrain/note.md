@@ -452,3 +452,16 @@ step  1400 | loss: 4.080996 | lr 5.9815e-04 | norm: 0.4113 | dt: 2994.92ms | tok
 添加hellaswag eval, 计算eval loss ， 输出一些sample
 
 打印一些loss log到文件
+```text
+HellaSwag accuracy: 2427/10042=0.2417
+step     0 | loss: 10.936531 | lr 8.3916e-07 | norm: 17.0941 | dt: 358520.24ms | tok/sec: 1462.37
+
+```
+
+
+### add checkpointing
+
+save checkpoint, 保存模型参数
+```python
+torch.save(checkpoint, checkpoint_path)
+```

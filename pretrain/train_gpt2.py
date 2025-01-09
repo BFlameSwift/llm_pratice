@@ -398,7 +398,7 @@ max_lr = 6e-4
 min_lr = max_lr * 0.1
 # recommend by gpt3
 warmup_steps = 715
-max_steps = 19073
+max_steps = 19073 # 19,073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
     if it < warmup_steps:
@@ -423,6 +423,19 @@ for step in range(max_steps):
     t0 = time.time()
     last_step = (step == max_steps - 1)
     # once in a while evaluate our validation loss
+    if step > 0 and (step % 5000 == 0 or last_step):
+        # optionally write model checkpoints
+        checkpoint_path = os.path.join(log_dir, f"model_{step:05d}.pt")
+        checkpoint = {
+            'model': raw_model.state_dict(),
+            'config': raw_model.config,
+            'step': step,
+            'val_loss': val_loss_accum.item()
+        }
+        # you might also want to add optimizer.state_dict() and
+        # rng seeds etc., if you wanted to more exactly resume training
+        torch.save(checkpoint, checkpoint_path)
+
     if step % 250 == 0 or last_step:
         model.eval()
         val_loader.reset()
