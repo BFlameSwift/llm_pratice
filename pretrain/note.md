@@ -207,13 +207,37 @@ torch.cuda.synchronize()
 
 
 
-### 
+### add torch  compile
 
 torch.compile
 
-kernel fusion,元素级别的操作合并到一起，减少内存往返
+kernel fusion,元素级别的操作合并到一起，减少内存往返。
 
+但对attention计算却不适用
 ```python
 model = torch.compile(model)
 ```
 速度在我的机器上提升了2倍多，500ms/epoch ——228ms/epoch
+
+ 
+### switch to  flash attention
+
+不从不实际生成end2end的矩阵,
+
+flash attention实际上提高了flops计算量，但却在计算上效率提高了7.6倍，主要原因是？
+
+减少内存访问。在线更新softmax
+
+1. 减少内存访问和I/O瓶颈:
+   局部块处理（块化计算）：将输入分成较小的块并在块内完成计算，避免将中间结果（如完整的注意力矩阵）写回主存。
+   减少中间结果存储：避免显式存储大规模的注意力矩阵，直接在计算过程中流式处理。
+2. 数值稳定性优化: Flash Attention 使用一个流式、数值稳定的 softmax 实现，可以在不存储完整矩阵的情况下完成计算。
+3. Flash Attention 对计算顺序进行了优化，使得计算密集型任务更贴近 GPU 的硬件特性
+4. 常规的注意力计算通常需要多次访存，而 Flash Attention 对访存模式进行了优化，使数据访问更加连续，充分利用了 GPU 的内存带宽。
+
+
+```python
+y = F.scaled_dot_product_attention(q, k, v, is_causal=True) # flash attention
+```
+
+速度提升了近两倍， 228ms/epoch —— 144ms/epoch
