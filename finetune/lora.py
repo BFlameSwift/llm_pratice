@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import transformers
 from utils import recursive_getattr, recursive_setattr
-
+import math
 
 class LoRALinear(torch.nn.Module):
     def __init__(self, weight, bias, lora_dim, lora_scaling):
@@ -13,8 +13,8 @@ class LoRALinear(torch.nn.Module):
         self.bias = torch.nn.Parameter(bias)
         # TODO: Implement lora left and right weights
         # 参考 https://github.com/microsoft/LoRA  lora的实现， loralib/layers.py
-        self.lora_right_weight = nn.Parameter(self.weight.new_zeros((self.weight.size(0), lora_dim)))
-        self.lora_left_weight = nn.Parameter(self.weight.new_zeros((lora_dim, self.weight.size(1))))
+        self.lora_right_weight = nn.Parameter(self.weight.new_zeros((self.weight.size(0), lora_dim))) # B
+        self.lora_left_weight = nn.Parameter(self.weight.new_zeros((lora_dim, self.weight.size(1)))) # A
         #############################################
         self.lora_scaling = lora_scaling / lora_dim
         self.init_parameters()
@@ -28,8 +28,8 @@ class LoRALinear(torch.nn.Module):
         # TODO: Initialize LoRA parameters
         nn.Linear.reset_parameters(self)
         
-        nn.init.kaiming_uniform_(self.lora_right_weight, a=math.sqrt(5))
-        nn.init.zeros_(self.lora_left_weight)
+        nn.init.kaiming_uniform_(self.lora_left_weight, a=math.sqrt(5))
+        nn.init.zeros_(self.lora_right_weight)
         # nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
         # nn.init.zeros_(self.lora_B)
         # raise NotImplementedError
@@ -38,9 +38,8 @@ class LoRALinear(torch.nn.Module):
     def forward(self, input):
         # TODO: Implement the forward function
         # 1. Calculate the linear output using the original weight and bias
-        result = F.linear(input, self.weight, self.bias)
-        result += self.lora_right_weight @ self.lora_left_weight * self.lora_scaling
-        return result
+        return torch.nn.functional.linear(input, self.weight + self.lora_scaling * torch.mm(self.lora_right_weight, self.lora_left_weight), self.bias)
+
         # raise NotImplementedError
         ######################################
 
@@ -68,10 +67,11 @@ def only_optimize_lora_parameters(model):
     # raise NotImplementedError
     for n, p in model.named_parameters():
         if 'lora_' not in n:
-        p.requires_grad = False
+            p.requires_grad = False
     for m in model.modules():
-        if isinstance(m, LoRALayer) and hasattr(m, 'bias') and m.bias is not None:
+        if isinstance(m, LoRALinear) and hasattr(m, 'bias') and m.bias is not None:
             m.bias.requires_grad = True
+    return model
     ##############################################################################
 
 def get_lora_state_dict(model):

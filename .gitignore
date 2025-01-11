@@ -164,3 +164,10 @@ cython_debug/
 *.ipynb
 
 !/bpe/bpe.ipynb
+
+align-anything/
+
+
+align-anything-google/
+
+finetune/result*/
